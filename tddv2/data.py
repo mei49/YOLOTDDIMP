@@ -64,7 +64,24 @@ def _names(base: Path, root: Path):
         if isinstance(d, dict) and d.get("names"):
             n = d["names"]
             return [n[k] for k in sorted(n)] if isinstance(n, dict) else list(n), y
-    raise FileNotFoundError(f"no yaml with `names` found in {base}")
+    return None, None
+
+
+def _label_stats(root: Path, layout: str):
+    """Instances per class id over all label files (used when the zip has no data.yaml)."""
+    from collections import Counter
+
+    c = Counter()
+    for split in SPLITS:
+        d = _split_dir(root, layout, split)
+        if d is None:
+            continue
+        ldir = d.parent.parent / "labels" / d.name if layout == "A" else d.parent / "labels"
+        for f in ldir.rglob("*.txt"):
+            for line in f.read_text().splitlines():
+                if line.strip():
+                    c[int(float(line.split()[0]))] += 1
+    return c
 
 
 def prepare(src="data/TD.zip", out_dir="data", yaml_name=None, names=None, verbose=True):
@@ -79,6 +96,11 @@ def prepare(src="data/TD.zip", out_dir="data", yaml_name=None, names=None, verbo
     root, layout = _find_root(base)
     names_override = names
     names, names_src = _names(base, root)
+    stats = _label_stats(root, layout)
+    if names is None:  # no data.yaml in the dataset: infer the class count from the label ids
+        if not stats:
+            raise FileNotFoundError(f"no data.yaml and no label files found under {root}")
+        names = [f"c{i}" for i in range(max(stats) + 1)]
     if names_override:
         if len(names_override) != len(names):
             raise ValueError(f"names override has {len(names_override)} entries, dataset has {len(names)} classes")
@@ -101,7 +123,9 @@ def prepare(src="data/TD.zip", out_dir="data", yaml_name=None, names=None, verbo
     out.write_text(yaml.safe_dump(cfg, sort_keys=False, allow_unicode=True))
     if verbose:
         print(f"dataset root : {root}  (layout {'images/<split>' if layout == 'A' else '<split>/images'})")
-        print(f"class names  : {names}  ({'override' if names_override else 'from ' + names_src.name})")
+        src_txt = "override" if names_override else (f"from {names_src.name}" if names_src else "no data.yaml: generic names from label ids")
+        print(f"class names  : {names}  ({src_txt})")
+        print(f"instances    : " + ", ".join(f"{names[k]}={v}" for k, v in sorted(stats.items())))
         print(f"images       : {counts}")
         print(f"wrote        : {out.resolve()}")
     return out.resolve()
