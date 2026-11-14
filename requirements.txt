@@ -1,0 +1,10 @@
+# Install the CUDA build of PyTorch FIRST (see README), then: pip install -r requirements.txt
+#   pip install torch==2.15.0 torchvision --index-url https://download.pytorch.org/whl/cu132
+torch>=2.4
+torchvision
+ultralytics==8.4.213   # tddv2/register.py patches parse_model; tested with exactly this version
+pandas
+matplotlib
+pyyaml
+jupyter
+ipykernel
