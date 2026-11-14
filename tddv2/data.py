@@ -67,14 +67,22 @@ def _names(base: Path, root: Path):
     raise FileNotFoundError(f"no yaml with `names` found in {base}")
 
 
-def prepare(src="data/TD.zip", out_dir="data", yaml_name=None, verbose=True):
-    """Prepare a dataset and return the path of a fresh data yaml with absolute local paths."""
+def prepare(src="data/TD.zip", out_dir="data", yaml_name=None, names=None, verbose=True):
+    """Prepare a dataset and return the path of a fresh data yaml with absolute local paths.
+
+    names: optional list overriding the class names from the zip (TD.zip ships generic c0..c8).
+    """
     src, out_dir = Path(src), Path(out_dir)
     if not src.exists():
         raise FileNotFoundError(f"dataset not found: {src.resolve()} (put TD.zip in data/ or set DATA)")
     base = _extract(src, out_dir) if src.suffix.lower() == ".zip" else src
     root, layout = _find_root(base)
+    names_override = names
     names, names_src = _names(base, root)
+    if names_override:
+        if len(names_override) != len(names):
+            raise ValueError(f"names override has {len(names_override)} entries, dataset has {len(names)} classes")
+        names = list(names_override)
 
     cfg = {"path": str(root.resolve())}
     counts = {}
@@ -93,7 +101,7 @@ def prepare(src="data/TD.zip", out_dir="data", yaml_name=None, verbose=True):
     out.write_text(yaml.safe_dump(cfg, sort_keys=False, allow_unicode=True))
     if verbose:
         print(f"dataset root : {root}  (layout {'images/<split>' if layout == 'A' else '<split>/images'})")
-        print(f"class names  : {names}  (from {names_src.name})")
+        print(f"class names  : {names}  ({'override' if names_override else 'from ' + names_src.name})")
         print(f"images       : {counts}")
         print(f"wrote        : {out.resolve()}")
     return out.resolve()
